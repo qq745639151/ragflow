@@ -237,8 +237,9 @@ class Dealer:
                 tt = self.token_merge(self.pretoken(tk, True))
                 idf1 = np.array([idf(freq(t), 10000000) for t in tt])
                 idf2 = np.array([idf(df(t), 1000000000) for t in tt])
+                from rag.nlp import rag_tokenizer
                 wts = (0.3 * idf1 + 0.7 * idf2) * \
-                      np.array([ner(t) * postag(t) for t in tt])
+                      np.array([ner(t) * postag(t) * (2.5 if rag_tokenizer.tokenizer.is_in_user_dict(t) else 1.0) for t in tt])
                 wts = [s for s in wts]
                 tw.extend(zip(tt, wts))
 

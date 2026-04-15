@@ -380,6 +380,19 @@ class Dealer:
         if not question:
             return ranks
 
+        # Dynamic adjustment of vector_similarity_weight based on query properties
+        # Short query (few terms) -> rely more on vector similarity (increase vector weight)
+        # Long query (many terms) -> rely more on token matching (decrease vector weight)
+        from rag.nlp import rag_tokenizer
+        question_tokens = rag_tokenizer.tokenize(question).split()
+        num_terms = len([t for t in question_tokens if t.strip()])
+
+        if num_terms <= 2:
+            vector_similarity_weight = max(vector_similarity_weight, 0.7)
+        elif num_terms >= 10:
+            vector_similarity_weight = min(vector_similarity_weight, 0.2)
+        # else: keep the original value
+
         # Ensure RERANK_LIMIT is multiple of page_size
         RERANK_LIMIT = math.ceil(64 / page_size) * page_size if page_size > 1 else 1
         RERANK_LIMIT = max(30, RERANK_LIMIT)

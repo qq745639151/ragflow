@@ -1720,6 +1720,12 @@ async def retrieval_new(tenant_id):
             max_tokens:
               type: integer
               description: Maximum number of tokens to return (including metadata).
+            query_expansion:
+              type: boolean
+              description: Whether to expand query using LLM to improve recall. Default false.
+            num_expansions:
+              type: integer
+              description: Number of expanded queries to generate. Default 2.
       - in: header
         name: Authorization
         type: string
@@ -1840,21 +1846,88 @@ async def retrieval_new(tenant_id):
             chat_mdl = LLMBundle(kb.tenant_id, LLMType.CHAT)
             question += await keyword_extraction(chat_mdl, question)
 
-        ranks = await settings.retriever.retrieval(
-            question,
-            embd_mdl,
-            tenant_ids,
-            kb_ids,
-            page,
-            size,
-            similarity_threshold,
-            vector_similarity_weight,
-            top,
-            doc_ids,
-            rerank_mdl=rerank_mdl,
-            highlight=highlight,
-            rank_feature=label_question(question, kbs),
-        )
+        # Query expansion with LLM - multiple queries retrieval and merge
+        all_chunks = []
+        seen_chunk_ids = set()
+        ranks = {"total": 0, "chunks": [], "doc_aggs": []}
+        query_expansion = req.get("query_expansion", False)
+        num_expansions = int(req.get("num_expansions", 2))
+
+        if query_expansion:
+            # Generate expanded queries
+            chat_mdl = LLMBundle(kb.tenant_id, LLMType.CHAT)
+            expanded_queries = [question]  # Always include original query
+            prompt = f"""你是一个专业的搜索查询扩展助手。请针对用户的原始问题，生成 {num_expansions} 个不同表述但语义相同/相关的查询。
+
+要求：
+1. 每个扩展查询应该使用不同的表达方式
+2. 保留原始问题的所有关键专业术语
+3. 扩展查询长度与原问题相近，不要太长也不要太短
+4. 如果原始问题包含专业术语，请务必保持原术语不变
+5. 直接返回 {num_expansions} 行，每行一个扩展查询，不要其他内容
+
+原始问题：{question}
+"""
+            try:
+                res = await chat_mdl.chat(prompt, None, {})
+                lines = [line.strip() for line in res.content.split('\n') if line.strip()]
+                for line in lines[:num_expansions]:
+                    if line != question and len(line) > 2:
+                        expanded_queries.append(line)
+            except Exception as e:
+                logging.warning(f"Query expansion failed: {e}, using original query only")
+                expanded_queries = [question]
+
+            # Retrieve for each expanded query
+            for q in expanded_queries:
+                ranks_q = await settings.retriever.retrieval(
+                    q,
+                    embd_mdl,
+                    tenant_ids,
+                    kb_ids,
+                    1,  # Get all candidates on first page
+                    1024,  # Get more candidates for merging
+                    similarity_threshold,
+                    vector_similarity_weight,
+                    top,
+                    doc_ids,
+                    rerank_mdl=rerank_mdl,
+                    highlight=highlight,
+                    rank_feature=label_question(q, kbs),
+                )
+                # Merge results with deduplication
+                for chunk in ranks_q["chunks"]:
+                    if chunk["chunk_id"] not in seen_chunk_ids:
+                        all_chunks.append(chunk)
+                        seen_chunk_ids.add(chunk["chunk_id"])
+
+            # Re-sort by similarity descending
+            all_chunks.sort(key=lambda x: x["similarity"], reverse=True)
+
+            # Build merged ranks
+            ranks["total"] = len(all_chunks)
+            # Apply pagination after sorting
+            begin = (page - 1) * size
+            end = begin + size
+            ranks["chunks"] = all_chunks[begin:end]
+        else:
+            # Original single query path
+            ranks = await settings.retriever.retrieval(
+                question,
+                embd_mdl,
+                tenant_ids,
+                kb_ids,
+                page,
+                size,
+                similarity_threshold,
+                vector_similarity_weight,
+                top,
+                doc_ids,
+                rerank_mdl=rerank_mdl,
+                highlight=highlight,
+                rank_feature=label_question(question, kbs),
+            )
+
         if toc_enhance:
             chat_mdl = LLMBundle(kb.tenant_id, LLMType.CHAT)
             cks = await settings.retriever.retrieval_by_toc(question, ranks["chunks"], tenant_ids, chat_mdl, size)

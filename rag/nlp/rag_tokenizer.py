@@ -17,6 +17,7 @@
 import infinity.rag_tokenizer
 import os
 import logging
+from typing import Set
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -36,6 +37,7 @@ class RagTokenizer(infinity.rag_tokenizer.RagTokenizer):
         super().__init__()
         self._dict_loaded = False
         self._last_mtime = 0
+        self._user_terms: Set[str] = set()
 
     def _ensure_dict_loaded(self):
         """Ensure user dictionary is loaded in this process, reload if file modified"""
@@ -53,8 +55,38 @@ class RagTokenizer(infinity.rag_tokenizer.RagTokenizer):
                 if os.path.exists(user_dict) and os.path.getmtime(user_dict) > self._last_mtime:
                     logger.info(f"Loading user dictionary from env: {user_dict} (process: {os.getpid()})")
                     self.add_user_dict(user_dict)
+            self._update_user_terms_cache()
             self._dict_loaded = True
             self._last_mtime = current_mtime
+
+    def _update_user_terms_cache(self):
+        """Update the cached set of user terms from dictionary file"""
+        self._user_terms.clear()
+        # Read from USER_DICT_FILE
+        if os.path.exists(USER_DICT_FILE):
+            with open(USER_DICT_FILE, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    parts = line.split()
+                    if parts:
+                        self._user_terms.add(parts[0])
+        # Read from USER_DICT environment variable if set
+        if os.getenv("USER_DICT") and os.path.exists(os.getenv("USER_DICT")):
+            with open(os.getenv("USER_DICT"), 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    parts = line.split()
+                    if parts:
+                        self._user_terms.add(parts[0])
+
+    def is_in_user_dict(self, term: str) -> bool:
+        """Check if a term exists in the user dictionary"""
+        self._ensure_dict_loaded()
+        return term in self._user_terms
 
     def tokenize(self, line: str) -> str:
         from common import settings # moved from the top of the file to avoid circular import
