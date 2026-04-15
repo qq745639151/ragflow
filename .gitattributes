@@ -1,2 +1,4 @@
+# Set default behavior to handle line endings
+* text eol=lf
 *.sh text eol=lf
 docker/entrypoint.sh text eol=lf executable

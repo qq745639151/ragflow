@@ -474,9 +474,11 @@ class Dealer:
                 "vector_similarity": float(vsim[i]),
                 "term_similarity": float(tsim[i]),
                 "vector": chunk.get(vector_column, zero_vector),
+                "page_num": chunk.get("page_num_int", []),
                 "positions": position_int,
                 "doc_type_kwd": chunk.get("doc_type_kwd", ""),
                 "mom_id": chunk.get("mom_id", ""),
+                "page_num": chunk.get("page_num_int", []),
             }
             if highlight and sres.highlight:
                 if id in sres.highlight:

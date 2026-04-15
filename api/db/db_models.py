@@ -919,6 +919,7 @@ class Task(DataBaseModel):
     to_page = IntegerField(default=100000000)
     task_type = CharField(max_length=32, null=False, default="")
     priority = IntegerField(default=0)
+    parser_id = CharField(max_length=32, null=True, default="")
 
     begin_at = DateTimeField(null=True, index=True)
     process_duration = FloatField(default=0)

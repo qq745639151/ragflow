@@ -746,6 +746,24 @@ def chunk(filename, binary=None, from_page=0, to_page=100000, lang="Chinese", ca
 
     is_english = lang.lower() == "english"  # is_english(cks)
     parser_config = kwargs.get("parser_config", {"chunk_token_num": 512, "delimiter": "\n!?。；！？", "layout_recognize": "DeepDOC", "analyze_hyperlink": True})
+    
+    # Check if custom parser is requested
+    parser_id = kwargs.get("parser_id")
+    if parser_id == "custom":
+        # Call user's custom parsing algorithm
+        try:
+            # Import the custom parser module
+            from rag.app.custom_parser import custom_parse
+            callback(0.1, "Using custom parser.")
+            # Call custom parse function
+            custom_chunks = custom_parse(filename, binary, from_page, to_page, lang, callback, **kwargs)
+            callback(0.8, "Custom parsing completed.")
+            return custom_chunks
+        except Exception as e:
+            logging.error(f"Custom parser failed: {e}")
+            callback(-1, f"Custom parser failed: {e}")
+            # Fallback to default parsing
+            pass
 
     child_deli = (parser_config.get("children_delimiter") or "").encode("utf-8").decode("unicode_escape").encode("latin1").decode("utf-8")
     cust_child_deli = re.findall(r"`([^`]+)`", child_deli)
