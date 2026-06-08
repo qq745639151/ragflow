@@ -193,9 +193,23 @@ class TenantService(CommonService):
             cls.model.tts_id,
             cls.model.parser_ids,
             UserTenant.role]
-        return list(cls.model.select(*fields)
+        rows = list(cls.model.select(*fields)
                     .join(UserTenant, on=((cls.model.id == UserTenant.tenant_id) & (UserTenant.user_id == user_id) & (UserTenant.status == StatusEnum.VALID.value) & (UserTenant.role == UserTenantRole.OWNER)))
                     .where(cls.model.status == StatusEnum.VALID.value).dicts())
+        default_parser_items = [item.strip() for item in (settings.PARSERS or "").split(",") if item.strip()]
+        for row in rows:
+            current_items = [item.strip() for item in (row.get("parser_ids") or "").split(",") if item.strip()]
+            seen = set()
+            merged_items = []
+            for item in current_items + default_parser_items:
+                key = item.split(":", 1)[0].strip().lower()
+                if not key or key in seen:
+                    continue
+                seen.add(key)
+                merged_items.append(item)
+            if merged_items:
+                row["parser_ids"] = ",".join(merged_items)
+        return rows
 
     @classmethod
     @DB.connection_context()

@@ -58,6 +58,7 @@ export const useTestRetrieval = () => {
   const knowledgeBaseId = useKnowledgeBaseId();
   const [values, setValues] = useState<ITestRetrievalRequestBody>();
   const mountedRef = useRef(false);
+  const submitPendingRef = useRef(false);
   const { filterValue, handleFilterSubmit } = useHandleFilterSubmit();
 
   const [page, setPage] = useState(1);
@@ -107,10 +108,25 @@ export const useTestRetrieval = () => {
     mountedRef.current = true;
   }, [page, pageSize, refetch, filterValue]);
 
+  useEffect(() => {
+    if (!mountedRef.current || !submitPendingRef.current) {
+      return;
+    }
+    submitPendingRef.current = false;
+    refetch();
+  }, [queryParams, refetch]);
+
+  const runTest = useCallback((nextValues: ITestRetrievalRequestBody) => {
+    submitPendingRef.current = true;
+    setPage(1);
+    setValues(nextValues);
+  }, []);
+
   return {
     data,
     loading,
     setValues,
+    runTest,
     refetch,
     onPaginationChange,
     page,

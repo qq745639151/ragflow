@@ -106,6 +106,8 @@ class ParserType(StrEnum):
     EMAIL = "email"
     KG = "knowledge_graph"
     TAG = "tag"
+    CUSTOM = "custom"
+    CUSTOM_PARAGRAPH = "custom_paragraph"
 
 
 class FileSource(StrEnum):

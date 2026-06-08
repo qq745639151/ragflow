@@ -114,6 +114,8 @@ export const useFetchTenantInfo = (
 
 const DEFAULT_PARSERS = [
   { value: 'naive', label: 'General' },
+  { value: 'custom', label: 'Custom' },
+  { value: 'custom_paragraph', label: 'Custom Paragraph' },
   { value: 'qa', label: 'Q&A' },
   { value: 'resume', label: 'Resume' },
   { value: 'manual', label: 'Manual' },
@@ -143,10 +145,21 @@ export const useSelectParserList = (): Array<{
       return DEFAULT_PARSERS;
     }
 
-    return filteredArray.map((x) => {
+    const current = filteredArray.map((x) => {
       const arr = x.split(':');
       return { value: arr[0], label: arr[1] };
     });
+    const currentValues = new Set(current.map((x) => x.value));
+    const requiredParsers = DEFAULT_PARSERS.filter((x) =>
+      ['custom', 'custom_paragraph'].includes(x.value),
+    );
+    const missingParsers = requiredParsers.filter(
+      (x) => !currentValues.has(x.value),
+    );
+    if (missingParsers.length > 0) {
+      return [...current, ...missingParsers];
+    }
+    return current;
   }, [tenantInfo]);
 
   return parserList;

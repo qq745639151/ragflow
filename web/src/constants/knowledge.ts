@@ -78,6 +78,8 @@ export enum DocumentType {
 
 export enum DocumentParserType {
   Naive = 'naive',
+  Custom = 'custom',
+  CustomParagraph = 'custom_paragraph',
   Qa = 'qa',
   Resume = 'resume',
   Manual = 'manual',

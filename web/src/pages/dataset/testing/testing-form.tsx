@@ -41,12 +41,12 @@ import { useParams } from 'react-router';
 
 type TestingFormProps = Pick<
   ReturnType<typeof useTestRetrieval>,
-  'loading' | 'refetch' | 'setValues'
+  'loading' | 'runTest' | 'setValues'
 >;
 
 export default function TestingForm({
   loading,
-  refetch,
+  runTest,
   setValues,
 }: TestingFormProps) {
   const { t } = useTranslation();
@@ -61,7 +61,7 @@ export default function TestingForm({
     ...vectorSimilarityWeightSchema,
     ...topKSchema,
     use_kg: z.boolean().optional(),
-    kb_ids: z.array(z.string()).optional(),
+    kb_id: z.array(z.string()).optional(),
     ...MetadataFilterSchema,
   });
 
@@ -72,7 +72,7 @@ export default function TestingForm({
       ...initialVectorSimilarityWeightValue,
       ...initialTopKValue,
       use_kg: false,
-      kb_ids: [knowledgeBaseId],
+      kb_id: [knowledgeBaseId],
     },
   });
 
@@ -84,8 +84,8 @@ export default function TestingForm({
     setValues(values as Required<z.infer<typeof formSchema>>);
   }, [setValues, values]);
 
-  function onSubmit() {
-    refetch();
+  function onSubmit(values: z.infer<typeof formSchema>) {
+    runTest(values);
   }
 
   return (

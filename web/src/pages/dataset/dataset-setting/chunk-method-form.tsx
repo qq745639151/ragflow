@@ -20,6 +20,8 @@ import { TagConfiguration } from './configuration/tag';
 
 const ConfigurationComponentMap = {
   [DocumentParserType.Naive]: NaiveConfiguration,
+  [DocumentParserType.Custom]: NaiveConfiguration,
+  [DocumentParserType.CustomParagraph]: NaiveConfiguration,
   [DocumentParserType.Qa]: QAConfiguration,
   [DocumentParserType.Resume]: ResumeConfiguration,
   [DocumentParserType.Manual]: ManualConfiguration,

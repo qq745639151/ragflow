@@ -413,6 +413,8 @@ def get_parser_config(chunk_method, parser_config):
         },
         "email": None,
         "picture": None,
+        "custom": None,
+        "custom_paragraph": None,
     }
 
     default_config = key_mapping[chunk_method]

@@ -6,6 +6,8 @@ const ParserListMap = new Map([
     ['pdf'],
     [
       'naive',
+      'custom',
+      'custom_paragraph',
       'resume',
       'manual',
       'paper',
@@ -21,6 +23,8 @@ const ParserListMap = new Map([
     ['doc', 'docx'],
     [
       'naive',
+      'custom',
+      'custom_paragraph',
       'resume',
       'book',
       'laws',
@@ -32,7 +36,15 @@ const ParserListMap = new Map([
   ],
   [
     ['xlsx', 'xls'],
-    ['naive', 'qa', 'table', 'one', 'knowledge_graph'],
+    [
+      'naive',
+      'custom',
+      'custom_paragraph',
+      'qa',
+      'table',
+      'one',
+      'knowledge_graph',
+    ],
   ],
   [['ppt', 'pptx'], ['presentation']],
   [
@@ -43,6 +55,8 @@ const ParserListMap = new Map([
     ['txt'],
     [
       'naive',
+      'custom',
+      'custom_paragraph',
       'resume',
       'book',
       'laws',
@@ -56,6 +70,8 @@ const ParserListMap = new Map([
     ['csv'],
     [
       'naive',
+      'custom',
+      'custom_paragraph',
       'resume',
       'book',
       'laws',
@@ -67,9 +83,9 @@ const ParserListMap = new Map([
   ],
   [
     ['md', 'mdx'],
-    ['naive', 'qa', 'knowledge_graph'],
+    ['naive', 'custom', 'custom_paragraph', 'qa', 'knowledge_graph'],
   ],
-  [['json'], ['naive', 'knowledge_graph']],
+  [['json'], ['naive', 'custom', 'custom_paragraph', 'knowledge_graph']],
   [['eml'], ['email']],
 ]);
 
@@ -96,7 +112,17 @@ export const useFetchParserListOnMount = (documentExtension: string) => {
     }
 
     return getParserList(
-      ['naive', 'resume', 'book', 'laws', 'one', 'qa', 'table'],
+      [
+        'naive',
+        'custom',
+        'custom_paragraph',
+        'resume',
+        'book',
+        'laws',
+        'one',
+        'qa',
+        'table',
+      ],
       parserList,
     );
   }, [parserList, documentExtension]);

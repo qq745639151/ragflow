@@ -9,7 +9,7 @@ export default function RetrievalTesting() {
   const {
     loading,
     setValues,
-    refetch,
+    runTest,
     data,
     onPaginationChange,
     page,
@@ -44,7 +44,7 @@ export default function RetrievalTesting() {
               <TestingForm
                 loading={loading}
                 setValues={setValues}
-                refetch={refetch}
+                runTest={runTest}
               ></TestingForm>
             </div>
           </div>
@@ -64,7 +64,7 @@ export default function RetrievalTesting() {
             <TestingForm
               loading={loading}
               setValues={setValues}
-              refetch={refetch}
+              runTest={runTest}
             ></TestingForm>
             <TestingResult
               data={data}
@@ -80,7 +80,7 @@ export default function RetrievalTesting() {
             <TestingForm
               loading={loading}
               setValues={setValues}
-              refetch={refetch}
+              runTest={runTest}
             ></TestingForm>
             <TestingResult
               data={data}

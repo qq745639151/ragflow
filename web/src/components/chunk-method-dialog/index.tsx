@@ -206,12 +206,17 @@ export function ChunkMethodDialog({
 
   const showMaxTokenNumber =
     selectedTag === DocumentParserType.Naive ||
+    selectedTag === DocumentParserType.Custom ||
+    selectedTag === DocumentParserType.CustomParagraph ||
     selectedTag === DocumentParserType.KnowledgeGraph;
 
   const showEntityTypes = selectedTag === DocumentParserType.KnowledgeGraph;
 
   const showExcelToHtml =
-    selectedTag === DocumentParserType.Naive && documentExtension === 'xlsx';
+    (selectedTag === DocumentParserType.Naive ||
+      selectedTag === DocumentParserType.Custom ||
+      selectedTag === DocumentParserType.CustomParagraph) &&
+    documentExtension === 'xlsx';
 
   const showAutoKeywords = useShowAutoKeywords();
 
@@ -388,7 +393,9 @@ export function ChunkMethodDialog({
                   }
                   className="space-y-3"
                 >
-                  {selectedTag === DocumentParserType.Naive && (
+                  {(selectedTag === DocumentParserType.Naive ||
+                    selectedTag === DocumentParserType.Custom ||
+                    selectedTag === DocumentParserType.CustomParagraph) && (
                     <>
                       <EnableTocToggle />
                       <ImageContextWindow />
