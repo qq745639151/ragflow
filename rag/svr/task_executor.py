@@ -66,7 +66,7 @@ from api.db.services.llm_service import LLMBundle
 from api.db.services.task_service import TaskService, has_canceled, CANVAS_DEBUG_DOC_ID, GRAPH_RAPTOR_FAKE_DOC_ID
 from api.db.services.file2document_service import File2DocumentService
 from common.versions import get_ragflow_version
-from api.db.db_models import close_connection
+from api.db.db_models import close_connection, Document
 from rag.app import laws, paper, presentation, manual, qa, table, book, resume, picture, naive, one, audio, \
     email, tag, custom_parser, custom_paragraph
 from rag.nlp import search, rag_tokenizer, add_positions
@@ -776,7 +776,17 @@ async def run_raptor_for_kb(row, kb_parser_config, chat_mdl, embd_mdl, vector_si
     tk_count = 0
     max_errors = int(os.environ.get("RAPTOR_MAX_ERRORS", 3))
 
-    async def generate(chunks, did):
+    # Pre-fetch document names so RAPTOR chunks use the correct docnm_kwd per doc_id
+    # instead of the task row's sample document name.
+    doc_name_map = {}
+    if doc_ids:
+        try:
+            docs = DocumentService.get_by_ids(doc_ids, cols=[Document.id, Document.name])
+            doc_name_map = {d.id: d.name for d in docs}
+        except Exception:
+            logging.exception("Failed to fetch document names for RAPTOR task")
+
+    async def generate(chunks, did, doc_name=None):
         nonlocal tk_count, res
         raptor = Raptor(
             raptor_config.get("max_cluster", 64),
@@ -789,11 +799,12 @@ async def run_raptor_for_kb(row, kb_parser_config, chat_mdl, embd_mdl, vector_si
         )
         original_length = len(chunks)
         chunks = await raptor(chunks, kb_parser_config["raptor"]["random_seed"], callback, row["id"])
+        doc_name = row["name"] if doc_name is None else doc_name
         doc = {
             "doc_id": did,
             "kb_id": [str(row["kb_id"])],
-            "docnm_kwd": row["name"],
-            "title_tks": rag_tokenizer.tokenize(row["name"]),
+            "docnm_kwd": doc_name,
+            "title_tks": rag_tokenizer.tokenize(doc_name),
             "raptor_kwd": "raptor"
         }
         if row["pagerank"]:
@@ -833,7 +844,7 @@ async def run_raptor_for_kb(row, kb_parser_config, chat_mdl, embd_mdl, vector_si
                 callback(msg=f"[WARN] No valid chunks with vectors found for doc {doc_id}, skipping")
                 continue
                 
-            await generate(chunks, doc_id)
+            await generate(chunks, doc_id, doc_name=doc_name_map.get(doc_id))
             callback(prog=(x + 1.) / len(doc_ids))
     else:
         chunks = []
