@@ -15,12 +15,38 @@
 #
 import logging
 import os
+import re
 import tempfile
 from quart import request
 
 from api.utils.api_utils import get_error_data_result, get_json_result, get_request_json, token_required
 from rag.nlp import rag_tokenizer
 from rag.nlp.rag_tokenizer import USER_DICT_FILE
+
+
+# Valid part-of-speech tags are ASCII letters (jieba style, e.g. n, v, nr, ns).
+_POS_RE = re.compile(r"^[A-Za-z]+$")
+
+
+def _validate_dict_entry(term, frequency, pos):
+    """Validate a single dictionary entry. Returns (ok, cleaned_term, cleaned_freq, cleaned_pos, reason)."""
+    if not isinstance(term, str):
+        return False, None, None, None, "term must be a string"
+    term = term.strip()
+    if not term:
+        return False, None, None, None, "term is empty"
+    if any(ch.isspace() for ch in term):
+        return False, None, None, None, "term contains whitespace"
+    if len(term) > 100:
+        return False, None, None, None, "term exceeds 100 characters"
+    try:
+        freq = int(frequency)
+    except (TypeError, ValueError):
+        return False, None, None, None, f"frequency is not an integer: {frequency}"
+    pos = str(pos).strip()
+    if not pos or not _POS_RE.match(pos):
+        return False, None, None, None, f"invalid pos tag: {pos}"
+    return True, term, freq, pos, None
 
 
 @manager.route("/dictionary/upload", methods=["POST"])  # noqa: F821
@@ -66,18 +92,38 @@ async def upload_dictionary(tenant_id):
         content = file.read()
         content = content.decode('utf-8')
 
+        # Validate and filter lines: problematic entries are skipped
+        valid_lines = []
+        skipped = 0
+        for raw_line in content.splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+            parts = line.split()
+            if len(parts) < 3:
+                skipped += 1
+                continue
+            ok, term, freq, pos, _ = _validate_dict_entry(parts[0], parts[1], parts[2])
+            if not ok:
+                skipped += 1
+                continue
+            valid_lines.append(f"{term} {freq} {pos}\n")
+
+        if not valid_lines:
+            return get_error_data_result(message="No valid dictionary entries found in uploaded file")
+
         # Ensure directory exists
         os.makedirs(os.path.dirname(USER_DICT_FILE), exist_ok=True)
-        
+
         # Append to persistent user dictionary file
-        logging.info(f"Writing to user dictionary file: {USER_DICT_FILE}")
-        with open(USER_DICT_FILE, 'a', encoding='utf-8') as f:
-            f.write(content)
-        logging.info(f"Successfully wrote to user dictionary file")
+        logging.info(f"Writing {len(valid_lines)} entries to user dictionary file: {USER_DICT_FILE}")
+        with open(USER_DICT_FILE, 'a', encoding='utf-8') as f:  # noqa: ASYNC230
+            f.writelines(valid_lines)
+        logging.info("Successfully wrote to user dictionary file")
 
         # Also load into current tokenizer
         with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', delete=False, suffix='.txt') as f:
-            f.write(content)
+            f.writelines(valid_lines)
             temp_file = f.name
 
         rag_tokenizer.tokenizer.add_user_dict(temp_file)
@@ -86,7 +132,14 @@ async def upload_dictionary(tenant_id):
 
         os.unlink(temp_file)
 
-        return get_json_result(data={"success": True, "message": "Dictionary uploaded and loaded successfully"})
+        return get_json_result(
+            data={
+                "success": True,
+                "message": f"Dictionary uploaded: {len(valid_lines)} entries added, {skipped} entries skipped",
+                "added_count": len(valid_lines),
+                "skipped_count": skipped,
+            }
+        )
     except Exception as e:
         logging.exception("Failed to upload dictionary")
         return get_error_data_result(message=f"Failed to upload dictionary: {str(e)}")
@@ -135,16 +188,17 @@ async def add_term(tenant_id):
         frequency = req.get("frequency", 3)
         pos = req.get("pos", "n")
 
-        if not term:
-            return get_error_data_result(message="Term is required")
+        ok, term, freq, pos, reason = _validate_dict_entry(term, frequency, pos)
+        if not ok:
+            return get_error_data_result(message=f"Invalid term: {reason}")
 
         # Append to persistent user dictionary file
-        with open(USER_DICT_FILE, 'a', encoding='utf-8') as f:
-            f.write(f"{term} {frequency} {pos}\n")
+        with open(USER_DICT_FILE, 'a', encoding='utf-8') as f:  # noqa: ASYNC230
+            f.write(f"{term} {freq} {pos}\n")
 
         # Also load into current tokenizer
         with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', delete=False, suffix='.txt') as f:
-            f.write(f"{term} {frequency} {pos}\n")
+            f.write(f"{term} {freq} {pos}\n")
             temp_file = f.name
 
         rag_tokenizer.tokenizer.add_user_dict(temp_file)
@@ -217,31 +271,32 @@ async def batch_add_terms(tenant_id):
         if len(terms) > 1000:
             return get_error_data_result(message="Batch size exceeds limit (maximum 1000 terms)")
 
-        # Create temporary file for batch terms and append to persistent file
+        # Validate and collect batch entries; problematic items are skipped
         added_count = 0
+        skipped_count = 0
         batch_terms = []
-        with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', delete=False, suffix='.txt') as f:
-            for item in terms:
-                term = item.get("term")
-                if not term:
-                    continue
-                # Validate term length
-                if len(term) > 100:
-                    continue
-                frequency = item.get("frequency", 3)
-                pos = item.get("pos", "n")
-                term_line = f"{term} {frequency} {pos}\n"
-                f.write(term_line)
-                batch_terms.append(term_line)
-                added_count += 1
-            temp_file = f.name
+        for item in terms:
+            term = item.get("term")
+            frequency = item.get("frequency", 3)
+            pos = item.get("pos", "n")
+            ok, term, freq, pos, _ = _validate_dict_entry(term, frequency, pos)
+            if not ok:
+                skipped_count += 1
+                continue
+            term_line = f"{term} {freq} {pos}\n"
+            batch_terms.append(term_line)
+            added_count += 1
 
         if added_count == 0:
-            os.unlink(temp_file)
             return get_error_data_result(message="No valid terms to add")
 
+        # Create temporary file for valid batch terms
+        with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', delete=False, suffix='.txt') as f:
+            f.writelines(batch_terms)
+            temp_file = f.name
+
         # Append to persistent user dictionary file
-        with open(USER_DICT_FILE, 'a', encoding='utf-8') as f:
+        with open(USER_DICT_FILE, 'a', encoding='utf-8') as f:  # noqa: ASYNC230
             f.writelines(batch_terms)
 
         # Add all terms at once to current tokenizer
@@ -251,7 +306,14 @@ async def batch_add_terms(tenant_id):
 
         os.unlink(temp_file)
 
-        return get_json_result(data={"success": True, "message": f"Successfully added {added_count} terms", "added_count": added_count})
+        return get_json_result(
+            data={
+                "success": True,
+                "message": f"Successfully added {added_count} terms, skipped {skipped_count} invalid terms",
+                "added_count": added_count,
+                "skipped_count": skipped_count,
+            }
+        )
     except Exception as e:
         logging.exception("Failed to add terms in batch")
         return get_error_data_result(message=f"Failed to add terms: {str(e)}")
